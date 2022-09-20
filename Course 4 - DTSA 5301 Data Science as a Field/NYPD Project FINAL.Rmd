@@ -1,0 +1,129 @@
+---
+title: "NYPD Project"
+output:
+  pdf_document: default
+  html_document: default
+date: "2022-09-03"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+# Introduction
+
+Gun violence has become a heated topic in the United States over the years. Gun ownership is part of the US culture due to the second amendment, but gun violence seems to be getting worse and more catastrophic. As more violence and shootings happen, many questions arise on how to combat the violence. In this report, I will be looking into New York City shootings and murders. There are a couple of questions I  will be analyzing: are there any trends in the number of shootings over the years? Is there a correlation between the number of shootings and the number of murders in a year?
+
+
+## Importing NYPD Shooting Incident Data
+
+The data is imported from the URL shown below. The source of the data is data.gov, which is an official website of the United States government. It is the NYPD shooting incident data from 2006 to 2021. It contains many different columns of information, which can be seen in the summary section. I will also load the libraries I need for this report. 
+
+```{r dataset}
+#get the data
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+url = "https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv?accessType=DOWNLOAD"
+NYPDdata = read_csv(url)
+```
+
+## Summary of Data
+A summary of the data is shown below.
+
+```{r summary}
+summary(NYPDdata)
+```
+## Transforming and Cleaning the Data
+
+To clean up the data, the appropriate variables will be changed to factor and date types. A column for the year the incident happened is added for later analysis. There is no missing data.
+
+```{r cleaning}
+NYPDdataTransformed = NYPDdata %>% select( c(OCCUR_DATE,OCCUR_TIME,BORO,STATISTICAL_MURDER_FLAG)) %>% 
+mutate(OCCUR_DATE = mdy(OCCUR_DATE)) %>% 
+mutate(YEAR = year(OCCUR_DATE))
+
+NYPDdataTransformed = as.data.frame(unclass(NYPDdataTransformed),stringsAsFactors = TRUE)
+
+head(NYPDdataTransformed)
+summary(NYPDdataTransformed)
+```
+
+## Analyze the Data
+
+Summarize the data for all of NYC and for each borough by number of incidents per year and number of fatalities (murders) per year.
+
+```{r Analysis}
+#Summarize incident data by grouping by year, and by year and borough
+NYPD_INCI_by_boro_year = NYPDdataTransformed %>% 
+  group_by(BORO, YEAR) %>% summarize(INCIDENTS = n()) 
+
+NYPD_INCI_by_year = NYPDdataTransformed %>% 
+  group_by(YEAR) %>% summarize(INCIDENTS = n())
+
+#Create data set of just murder incidents
+NYPD_Murders = NYPDdataTransformed %>% 
+  filter( STATISTICAL_MURDER_FLAG == TRUE)
+
+NYPD_Murders_by_boro_year = NYPD_Murders %>% 
+  group_by(BORO, YEAR) %>% summarize(MURDERS = n()) 
+  
+NYPD_Murders_by_year = NYPD_Murders %>% 
+  group_by(YEAR) %>% summarize(MURDERS = n()) 
+
+#Join the shooting incident and murder incident data together
+NYPD_by_year = NYPD_INCI_by_year %>% 
+  full_join(NYPD_Murders_by_year)
+head(NYPD_by_year)
+
+NYPD_by_boro_year = NYPD_INCI_by_boro_year %>% 
+  full_join(NYPD_Murders_by_boro_year)
+head(NYPD_by_boro_year)
+```
+
+## Visualize the Data
+
+```{r plots}
+NYPD_by_year %>% 
+  ggplot(aes(x = YEAR,y = INCIDENTS)) +
+  geom_line(aes(color = "SHOOTING INCIDENTS")) +
+  geom_line(aes(y = MURDERS, color = "MURDERS"))+
+  ggtitle("NYC Data") +
+  ylab("Quantity")
+
+NYPD_by_year %>% 
+  ggplot(aes(x = INCIDENTS,y = MURDERS)) +
+   geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  ggtitle("NYC Data: Shooting Incidents vs Murders")
+
+NYPD_by_boro_year %>% 
+  ggplot(aes(x = YEAR,y = INCIDENTS)) +
+  geom_line(aes(color = BORO)) +
+  ggtitle("NYC Shooting Incident Data by Borough")
+
+NYPD_by_boro_year %>% 
+  ggplot(aes(x = YEAR,y = MURDERS)) +
+  geom_line(aes(color = BORO)) +
+  ggtitle("NYC Murder Data by Borough")
+
+NYPD_by_boro_year %>% 
+  ggplot(aes(x = INCIDENTS,y = MURDERS)) +
+   geom_point(aes(color = BORO)) +
+  geom_smooth(method = "lm", se = FALSE) +
+  ggtitle("NYC Borough Data: Shooting Incidents vs Murders")
+```
+
+## Analysis of Visualizations
+
+The visualizations of all of NYC and each borough show similar information: shooting incidents and murders were on a downtrend from 2006 (the start of the data) to 2019. Then in 2020, there was a large increase in shooting incidents and murders. 
+There is a linear relationship between the number of shooting incidents and the number of murders. As the number of incidents increases, the number of murders increases as well. This can be seen from the linear models on the shooting incidents versus murders graphs. The borough graphs show that there are more shooting incidents and murders in the Bronx and Brooklyn and that Staten Island has the smallest number of incidents and murders. 
+
+There are a couple of questions that immediately come to mind for further investigation. First, what was the cause of the sharp increase in incidents and murders in 2020? Second, are the populations of the Bronx and Brooklyn much greater than the others? If the number of incidents (and murders) is normalized by each borough's population, would the normalized numbers be more similar? That is if you calculated the number of incidents per 1,000 people, would they be closer together than the raw number of incidents?
+
+# Conlcusion
+
+From 2006 to 2019, there was a downward trend in shooting incidents and murders in New York City, followed by a large increase in 2020. There is a positive linear relationship between the number of shooting incidents and the number of murders. This trend and relationship are seen in all of NYC and each borough of NYC. 
+
+A possible source of bias is the data itself based on how it is collected or measured. Were all incidents reported and investigated equally?
+A personal bias I might have is from my race and gender. I have mitigated this by not including race or gender data in my analysis. 
